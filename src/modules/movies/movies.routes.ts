@@ -129,7 +129,7 @@ moviesRouter.post(
  *       404: { $ref: '#/components/responses/NotFound' }
  *   patch:
  *     tags: [Movies]
- *     summary: Update a movie (admin)
+ *     summary: Update a movie (admin). Send only the fields to change.
  *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: string } }
@@ -137,7 +137,16 @@ moviesRouter.post(
  *       required: true
  *       content:
  *         application/json:
- *           schema: { $ref: '#/components/schemas/MovieInput' }
+ *           schema:
+ *             type: object
+ *             minProperties: 1
+ *             properties:
+ *               title: { type: string, example: Inception }
+ *               releaseYear: { type: integer, example: 2010 }
+ *               genres: { type: array, items: { $ref: '#/components/schemas/Genre' } }
+ *               director: { type: string }
+ *               actors: { type: array, items: { type: string } }
+ *               description: { type: string }
  *     responses:
  *       200:
  *         description: Updated
