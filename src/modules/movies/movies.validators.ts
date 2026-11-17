@@ -11,12 +11,15 @@ const year = z.coerce
   .min(FIRST_FILM_YEAR)
   .refine((y) => y <= maxYear(), { message: 'Release year is too far in the future' });
 
+/** Genres are matched case-insensitively: "Drama" and "DRAMA" both become "drama". */
+const genre = z.string().trim().toLowerCase().pipe(z.enum(GENRES));
+
 export const movieIdParams = z.object({ id: objectId });
 
 const movieFields = {
   title: z.string().trim().min(1).max(200),
   releaseYear: year,
-  genres: z.array(z.enum(GENRES)).min(1),
+  genres: z.array(genre).min(1),
   director: z.string().trim().min(1).max(100),
   actors: z.array(z.string().trim().min(1).max(100)),
   description: z.string().trim().max(2000),
@@ -47,18 +50,26 @@ export const MOVIE_SORT_FIELDS = [
   '-createdAt',
 ] as const;
 
+const sortFieldByLowerCase = new Map(MOVIE_SORT_FIELDS.map((f) => [f.toLowerCase(), f]));
+
+const movieSort = z
+  .string()
+  .trim()
+  .transform((s) => sortFieldByLowerCase.get(s.toLowerCase()) ?? s)
+  .pipe(z.enum(MOVIE_SORT_FIELDS));
+
 export const searchMoviesQuery = z
   .object({
     ...paginationQuery,
     /** Partial, case-insensitive match on title. */
     q: z.string().trim().min(1).optional(),
-    genre: z.enum(GENRES).optional(),
+    genre: genre.optional(),
     director: z.string().trim().min(1).optional(),
     actor: z.string().trim().min(1).optional(),
     yearFrom: year.optional(),
     yearTo: year.optional(),
     minRating: z.coerce.number().min(0).max(RATING_MAX).optional(),
-    sort: z.enum(MOVIE_SORT_FIELDS).default('-createdAt'),
+    sort: movieSort.default('-createdAt'),
   })
   .refine((v) => !v.yearFrom || !v.yearTo || v.yearFrom <= v.yearTo, {
     message: 'yearFrom must be less than or equal to yearTo',
@@ -68,3 +79,4 @@ export const searchMoviesQuery = z
 export type CreateMovieInput = z.infer<typeof createMovieSchema>;
 export type UpdateMovieInput = z.infer<typeof updateMovieSchema>;
 export type SearchMoviesQuery = z.infer<typeof searchMoviesQuery>;
+export type MovieSortField = (typeof MOVIE_SORT_FIELDS)[number];
