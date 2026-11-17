@@ -11,8 +11,6 @@ export interface AuthResult {
 
 const INVALID_CREDENTIALS = 'Invalid email or password';
 
-const issueToken = (user: UserDocument) => signToken({ id: user.id, role: user.role });
-
 export const authService = {
   async register(input: RegisterInput): Promise<AuthResult> {
     const existing = await UserModel.findOne({
@@ -32,7 +30,7 @@ export const authService = {
       role: 'user',
     });
 
-    return { user, token: issueToken(user) };
+    return { user, token: signToken({ id: user.id, role: user.role }) };
   },
 
   async login(input: LoginInput): Promise<AuthResult> {
@@ -46,7 +44,7 @@ export const authService = {
       throw AppError.unauthorized(INVALID_CREDENTIALS);
     }
 
-    return { user, token: issueToken(user) };
+    return { user, token: signToken({ id: user.id, role: user.role }) };
   },
 
   async getMe(userId: string): Promise<UserDocument> {
