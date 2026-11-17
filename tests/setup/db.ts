@@ -5,6 +5,7 @@
  * If MONGO_TEST_URI is set, uses that server instead (e.g. `docker compose up -d`
  * and MONGO_TEST_URI=mongodb://127.0.0.1:27017). Each test file gets its own database.
  */
+import * as os from 'os';
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 
@@ -17,17 +18,22 @@ beforeAll(async () => {
     uri = memoryServer.getUri();
   }
   const dbName = `test_${process.pid}_${Math.random().toString(36).slice(2, 8)}`;
-  await mongoose.connect(uri, { dbName });
+  await mongoose.connect(uri, { dbName, runtimeAdapters: { os } });
   await mongoose.connection.syncIndexes(); // make unique indexes active before tests run
 });
 
 afterEach(async () => {
-  const collections = await mongoose.connection.db!.collections();
+  const collections = (await mongoose.connection.db?.collections()) ?? [];
   await Promise.all(collections.map((c) => c.deleteMany({})));
 });
 
 afterAll(async () => {
-  await mongoose.connection.dropDatabase();
-  await mongoose.disconnect();
-  await memoryServer?.stop();
+  // Always stop the in-memory server, even if setup failed: otherwise every failed run
+  // leaks a mongod process and a ~200MB /tmp/mongo-mem-* directory.
+  try {
+    if (mongoose.connection.readyState === 1) await mongoose.connection.dropDatabase();
+    await mongoose.disconnect();
+  } finally {
+    await memoryServer?.stop();
+  }
 });
