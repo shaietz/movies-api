@@ -91,7 +91,14 @@ export const reviewsService = {
     throw AppError.notImplemented('reviews.remove');
   },
 
-  async recalculateMovieStats(_movieId: string): Promise<void> {
-    throw AppError.notImplemented('reviews.recalculateMovieStats');
+  /**
+   * Recomputes ratingAverage + reviewCount from all of the movie's reviews and stores them
+   * on the movie. Recomputing from scratch (instead of adjusting by +/- one rating) means
+   * the stats can never drift, whatever happened before.
+   */
+  async recalculateMovieStats(movieId: string): Promise<void> {
+    const reviews = await ReviewModel.find({ movie: movieId }, { rating: 1, _id: 0 }).lean();
+    const stats = calculateRatingStats(reviews.map((r) => r.rating));
+    await MovieModel.updateOne({ _id: movieId }, { $set: stats });
   },
 };
