@@ -23,12 +23,17 @@ beforeAll(async () => {
 });
 
 afterEach(async () => {
-  const collections = await mongoose.connection.db!.collections();
+  const collections = (await mongoose.connection.db?.collections()) ?? [];
   await Promise.all(collections.map((c) => c.deleteMany({})));
 });
 
 afterAll(async () => {
-  await mongoose.connection.dropDatabase();
-  await mongoose.disconnect();
-  await memoryServer?.stop();
+  // Always stop the in-memory server, even if setup failed: otherwise every failed run
+  // leaks a mongod process and a ~200MB /tmp/mongo-mem-* directory.
+  try {
+    if (mongoose.connection.readyState === 1) await mongoose.connection.dropDatabase();
+    await mongoose.disconnect();
+  } finally {
+    await memoryServer?.stop();
+  }
 });

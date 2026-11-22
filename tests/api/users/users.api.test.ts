@@ -1,5 +1,6 @@
 import { Types } from 'mongoose';
-import { tokenFor } from '../../helpers/auth';
+import { reviewsService } from '../../../src/modules/reviews/reviews.service';
+import { createAdmin, createUser, tokenFor } from '../../helpers/auth';
 import { api, bearer } from '../../helpers/request';
 
 describe('Users API (admin only)', () => {
@@ -30,8 +31,63 @@ describe('Users API (admin only)', () => {
     expect(res.status).toBe(400);
   });
 
-  it.todo('GET /api/users lists users without passwords');
-  it.todo('PATCH /api/users/:id/role promotes a user to admin');
-  it.todo('DELETE /api/users/:id returns 204 and removes the user');
-  it.todo('an admin cannot delete or demote themselves (400)');
+  it('GET /api/users lists users without passwords', async () => {
+    const { token } = await createAdmin();
+    await createUser();
+
+    const res = await api().get('/api/users').set(bearer(token));
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(2);
+    expect(res.body.pagination).toMatchObject({ page: 1, limit: 20, total: 2 });
+    for (const u of res.body.data) {
+      expect(u).not.toHaveProperty('password');
+      expect(u).toHaveProperty('id');
+    }
+  });
+
+  it('GET /api/users/:id returns 404 for an unknown user', async () => {
+    const { token } = await createAdmin();
+    const res = await api().get(`/api/users/${someId}`).set(bearer(token));
+    expect(res.status).toBe(404);
+  });
+
+  it('PATCH /api/users/:id/role promotes a user to admin', async () => {
+    const { token } = await createAdmin();
+    const { user } = await createUser();
+
+    const res = await api()
+      .patch(`/api/users/${user.id}/role`)
+      .set(bearer(token))
+      .send({ role: 'admin' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.user).toMatchObject({ id: user.id, role: 'admin' });
+  });
+
+  it('DELETE /api/users/:id returns 204 and removes the user', async () => {
+    const recalc = jest.spyOn(reviewsService, 'recalculateMovieStats').mockResolvedValue();
+    const { token } = await createAdmin();
+    const { user } = await createUser();
+
+    const res = await api().delete(`/api/users/${user.id}`).set(bearer(token));
+    expect(res.status).toBe(204);
+
+    const after = await api().get(`/api/users/${user.id}`).set(bearer(token));
+    expect(after.status).toBe(404);
+    recalc.mockRestore();
+  });
+
+  it('an admin cannot delete or demote themselves (400)', async () => {
+    const { user: admin, token } = await createAdmin();
+
+    const del = await api().delete(`/api/users/${admin.id}`).set(bearer(token));
+    expect(del.status).toBe(400);
+
+    const demote = await api()
+      .patch(`/api/users/${admin.id}/role`)
+      .set(bearer(token))
+      .send({ role: 'user' });
+    expect(demote.status).toBe(400);
+  });
 });
