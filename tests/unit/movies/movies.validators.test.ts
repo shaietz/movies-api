@@ -23,6 +23,11 @@ describe('movies validators', () => {
       expect(createMovieSchema.safeParse({ ...movieInput(), ...override }).success).toBe(false);
     });
 
+    it('accepts genres in any case and stores them lowercase', () => {
+      const parsed = createMovieSchema.parse({ ...movieInput(), genres: ['Drama', ' SCI-FI '] });
+      expect(parsed.genres).toEqual(['drama', 'sci-fi']);
+    });
+
     it('rejects client-supplied rating stats', () => {
       const result = createMovieSchema.safeParse({ ...movieInput(), ratingAverage: 10 });
       expect(result.success).toBe(false);
@@ -48,6 +53,17 @@ describe('movies validators', () => {
         limit: 20,
         sort: '-createdAt',
       });
+    });
+
+    it('ignores case in genre and sort', () => {
+      expect(searchMoviesQuery.parse({ genre: 'DRAMA', sort: '-RATINGaverage' })).toMatchObject({
+        genre: 'drama',
+        sort: '-ratingAverage',
+      });
+    });
+
+    it('rejects an unknown sort field', () => {
+      expect(searchMoviesQuery.safeParse({ sort: 'budget' }).success).toBe(false);
     });
 
     it('rejects yearFrom > yearTo', () => {
