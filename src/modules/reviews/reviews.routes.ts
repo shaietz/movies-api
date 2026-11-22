@@ -28,7 +28,14 @@ export const reviewsRouter = Router();
  *       required: [rating]
  *       properties:
  *         rating: { type: integer, minimum: 1, maximum: 10, example: 9 }
- *         text: { type: string, example: Mind-bending and beautifully shot. }
+ *         text: { type: string, maxLength: 5000, example: Mind-bending and beautifully shot. }
+ *     ReviewUpdate:
+ *       type: object
+ *       minProperties: 1
+ *       description: Send rating and/or text.
+ *       properties:
+ *         rating: { type: integer, minimum: 1, maximum: 10, example: 7 }
+ *         text: { type: string, maxLength: 5000, example: Better on a second watch. }
  *     Review:
  *       allOf:
  *         - $ref: '#/components/schemas/ReviewInput'
@@ -122,7 +129,7 @@ movieReviewsRouter.post(
  *       404: { $ref: '#/components/responses/NotFound' }
  *   patch:
  *     tags: [Reviews]
- *     summary: Edit your own review
+ *     summary: Edit your own review (author only, admins included)
  *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: string } }
@@ -130,7 +137,7 @@ movieReviewsRouter.post(
  *       required: true
  *       content:
  *         application/json:
- *           schema: { $ref: '#/components/schemas/ReviewInput' }
+ *           schema: { $ref: '#/components/schemas/ReviewUpdate' }
  *     responses:
  *       200:
  *         description: Updated
