@@ -78,10 +78,72 @@ describe('Reviews API', () => {
     });
   });
 
+  describe('creating', () => {
+    it('POST -> 201, and the movie now shows reviewCount 1 and the rating as average', async () => {
+      const movie = await createMovie();
+      const { user, token } = await createUser({ username: 'dana' });
+
+      const res = await api()
+        .post(`/api/movies/${movie.id}/reviews`)
+        .set(bearer(token))
+        .send({ rating: 8, text: '  Really good  ' });
+
+      expect(res.status).toBe(201);
+      expect(res.body.review).toMatchObject({
+        rating: 8,
+        text: 'Really good',
+        movie: movie.id,
+        user: { id: user.id, username: 'dana' },
+      });
+
+      const details = await api().get(`/api/movies/${movie.id}`);
+      expect(details.body.movie).toMatchObject({ reviewCount: 1, ratingAverage: 8 });
+    });
+
+    it('POST without text -> 201 with empty text', async () => {
+      const movie = await createMovie();
+      const { token } = await createUser();
+
+      const res = await api()
+        .post(`/api/movies/${movie.id}/reviews`)
+        .set(bearer(token))
+        .send({ rating: 3 });
+
+      expect(res.status).toBe(201);
+      expect(res.body.review.text).toBe('');
+    });
+
+    it('POST twice by the same user -> 409', async () => {
+      const movie = await createMovie();
+      const { token } = await createUser();
+      const post = () =>
+        api().post(`/api/movies/${movie.id}/reviews`).set(bearer(token)).send({ rating: 7 });
+
+      expect((await post()).status).toBe(201);
+      expect((await post()).status).toBe(409);
+    });
+
+    it('POST for a missing movie -> 404', async () => {
+      const { token } = await createUser();
+      const res = await api()
+        .post(`/api/movies/${movieId}/reviews`)
+        .set(bearer(token))
+        .send({ rating: 7 });
+      expect(res.status).toBe(404);
+    });
+
+    it('POST with unknown fields (e.g. user or movie) -> 400', async () => {
+      const movie = await createMovie();
+      const { token } = await createUser();
+      const res = await api()
+        .post(`/api/movies/${movie.id}/reviews`)
+        .set(bearer(token))
+        .send({ rating: 7, user: new Types.ObjectId().toString() });
+      expect(res.status).toBe(400);
+    });
+  });
+
   describe('features', () => {
-    it.todo('POST -> 201, and the movie now shows reviewCount 1 and the rating as average');
-    it.todo('POST twice by the same user -> 409');
-    it.todo('POST for a missing movie -> 404');
     it.todo('PATCH by the author -> 200 and the movie average changes');
     it.todo('PATCH by another user -> 403');
     it.todo('DELETE by the author -> 204');
