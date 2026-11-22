@@ -1,5 +1,5 @@
 import { Types } from 'mongoose';
-import { createUser, tokenFor } from '../../helpers/auth';
+import { createAdmin, createUser, tokenFor } from '../../helpers/auth';
 import { createMovie, createReview } from '../../helpers/factories';
 import { api, bearer } from '../../helpers/request';
 
@@ -143,11 +143,81 @@ describe('Reviews API', () => {
     });
   });
 
-  describe('features', () => {
-    it.todo('PATCH by the author -> 200 and the movie average changes');
-    it.todo('PATCH by another user -> 403');
-    it.todo('DELETE by the author -> 204');
-    it.todo('DELETE by an admin -> 204');
-    it.todo('DELETE by another regular user -> 403');
+  describe('editing and deleting', () => {
+    /** A movie with one review (rating 6) by `author`, created through the API. */
+    async function reviewedMovie() {
+      const movie = await createMovie();
+      const author = await createUser();
+      const res = await api()
+        .post(`/api/movies/${movie.id}/reviews`)
+        .set(bearer(author.token))
+        .send({ rating: 6, text: 'Fine' });
+      return { movie, author, reviewId: res.body.review.id as string };
+    }
+
+    const movieDetails = async (id: string) => (await api().get(`/api/movies/${id}`)).body.movie;
+
+    it('PATCH by the author -> 200 and the movie average changes', async () => {
+      const { movie, author, reviewId: id } = await reviewedMovie();
+
+      const res = await api()
+        .patch(`/api/reviews/${id}`)
+        .set(bearer(author.token))
+        .send({ rating: 9 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.review).toMatchObject({ id, rating: 9, text: 'Fine' });
+      expect(await movieDetails(movie.id)).toMatchObject({ ratingAverage: 9, reviewCount: 1 });
+    });
+
+    it('PATCH by another user -> 403, and by an admin -> 403', async () => {
+      const { reviewId: id } = await reviewedMovie();
+      const other = await createUser();
+      const admin = await createAdmin();
+
+      for (const token of [other.token, admin.token]) {
+        const res = await api().patch(`/api/reviews/${id}`).set(bearer(token)).send({ rating: 1 });
+        expect(res.status).toBe(403);
+      }
+    });
+
+    it('PATCH with an empty body -> 400', async () => {
+      const { author, reviewId: id } = await reviewedMovie();
+      const res = await api().patch(`/api/reviews/${id}`).set(bearer(author.token)).send({});
+      expect(res.status).toBe(400);
+    });
+
+    it('PATCH or DELETE a missing review -> 404', async () => {
+      const { token } = await createUser();
+      const auth = bearer(token);
+      const patch = await api().patch(`/api/reviews/${reviewId}`).set(auth).send({ rating: 5 });
+      expect(patch.status).toBe(404);
+      expect((await api().delete(`/api/reviews/${reviewId}`).set(auth)).status).toBe(404);
+    });
+
+    it('DELETE by the author -> 204, and the movie stats go back to zero', async () => {
+      const { movie, author, reviewId: id } = await reviewedMovie();
+
+      const res = await api().delete(`/api/reviews/${id}`).set(bearer(author.token));
+
+      expect(res.status).toBe(204);
+      expect((await api().get(`/api/reviews/${id}`)).status).toBe(404);
+      expect(await movieDetails(movie.id)).toMatchObject({ ratingAverage: 0, reviewCount: 0 });
+    });
+
+    it('DELETE by an admin -> 204', async () => {
+      const { reviewId: id } = await reviewedMovie();
+      const admin = await createAdmin();
+
+      expect((await api().delete(`/api/reviews/${id}`).set(bearer(admin.token))).status).toBe(204);
+    });
+
+    it('DELETE by another regular user -> 403', async () => {
+      const { reviewId: id } = await reviewedMovie();
+      const other = await createUser();
+
+      expect((await api().delete(`/api/reviews/${id}`).set(bearer(other.token))).status).toBe(403);
+      expect((await api().get(`/api/reviews/${id}`)).status).toBe(200);
+    });
   });
 });
