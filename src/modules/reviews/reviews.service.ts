@@ -115,8 +115,15 @@ export const reviewsService = {
     return review.populate('user', AUTHOR_FIELDS);
   },
 
-  async remove(_id: string, _actor: AuthUser): Promise<void> {
-    throw AppError.notImplemented('reviews.remove');
+  /** The author, or an admin moderating content. */
+  async remove(id: string, actor: AuthUser): Promise<void> {
+    const review = await findReviewOrThrow(id);
+    if (!isAuthor(review, actor) && actor.role !== 'admin') {
+      throw AppError.forbidden('You can only delete your own review');
+    }
+
+    await review.deleteOne();
+    await this.recalculateMovieStats(String(review.movie));
   },
 
   /**
