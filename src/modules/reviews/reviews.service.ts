@@ -4,15 +4,19 @@ import type { Paginated } from '../../shared/utils/pagination';
 import type { ReviewDocument } from './review.model';
 import type { CreateReviewInput, ListReviewsQuery, UpdateReviewInput } from './reviews.validators';
 
-/**
- * Pure helper for the rating stats. Rounded to one decimal; 0 when there are no reviews.
- * Unit-test this first.
- */
-export function calculateRatingStats(_ratings: number[]): {
+export interface RatingStats {
   ratingAverage: number;
   reviewCount: number;
-} {
-  throw AppError.notImplemented('calculateRatingStats');
+}
+
+/** Pure helper for the rating stats. Rounded to one decimal; 0 when there are no reviews. */
+export function calculateRatingStats(ratings: number[]): RatingStats {
+  const reviewCount = ratings.length;
+  if (reviewCount === 0) return { ratingAverage: 0, reviewCount: 0 };
+
+  const sum = ratings.reduce((total, rating) => total + rating, 0);
+  const ratingAverage = Math.round((sum / reviewCount) * 10) / 10;
+  return { ratingAverage, reviewCount };
 }
 
 /**
