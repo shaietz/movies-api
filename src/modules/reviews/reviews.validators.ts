@@ -28,4 +28,5 @@ export const listReviewsQuery = z.object({
 
 export type CreateReviewInput = z.infer<typeof createReviewSchema>;
 export type UpdateReviewInput = z.infer<typeof updateReviewSchema>;
+export type ReviewSortField = (typeof REVIEW_SORT_FIELDS)[number];
 export type ListReviewsQuery = z.infer<typeof listReviewsQuery>;

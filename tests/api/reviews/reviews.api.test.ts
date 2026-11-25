@@ -1,5 +1,6 @@
 import { Types } from 'mongoose';
-import { tokenFor } from '../../helpers/auth';
+import { createUser, tokenFor } from '../../helpers/auth';
+import { createMovie, createReview } from '../../helpers/factories';
 import { api, bearer } from '../../helpers/request';
 
 describe('Reviews API', () => {
@@ -26,11 +27,61 @@ describe('Reviews API', () => {
     });
   });
 
+  describe('reading (public)', () => {
+    it('GET /api/movies/:movieId/reviews is public, paginated, and shows usernames', async () => {
+      const movie = await createMovie();
+      const { user: alice } = await createUser({ username: 'alice' });
+      const { user: bob } = await createUser({ username: 'bob' });
+      await createReview({ movie: movie._id, user: alice._id, rating: 6 });
+      await createReview({ movie: movie._id, user: bob._id, rating: 9 });
+
+      const res = await api().get(`/api/movies/${movie.id}/reviews?sort=-rating&limit=1`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.pagination).toEqual({ page: 1, limit: 1, total: 2, totalPages: 2 });
+      expect(res.body.data).toHaveLength(1);
+      expect(res.body.data[0]).toMatchObject({
+        rating: 9,
+        movie: movie.id,
+        user: { id: bob.id, username: 'bob' },
+      });
+      expect(res.body.data[0].user.email).toBeUndefined();
+    });
+
+    it('GET /api/movies/:movieId/reviews -> 404 for a missing movie', async () => {
+      expect((await api().get(`/api/movies/${movieId}/reviews`)).status).toBe(404);
+    });
+
+    it('GET /api/movies/:movieId/reviews -> 400 for an unknown sort field', async () => {
+      const movie = await createMovie();
+      expect((await api().get(`/api/movies/${movie.id}/reviews?sort=user`)).status).toBe(400);
+    });
+
+    it('GET /api/reviews/:id -> 200 with the review', async () => {
+      const movie = await createMovie();
+      const { user } = await createUser({ username: 'carol' });
+      const review = await createReview({ movie: movie._id, user: user._id, text: 'Loved it' });
+
+      const res = await api().get(`/api/reviews/${review.id}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.review).toMatchObject({
+        id: review.id,
+        text: 'Loved it',
+        user: { id: user.id, username: 'carol' },
+      });
+    });
+
+    it('GET /api/reviews/:id -> 404 for a missing review, 400 for a malformed id', async () => {
+      expect((await api().get(`/api/reviews/${reviewId}`)).status).toBe(404);
+      expect((await api().get('/api/reviews/not-an-id')).status).toBe(400);
+    });
+  });
+
   describe('features', () => {
     it.todo('POST -> 201, and the movie now shows reviewCount 1 and the rating as average');
     it.todo('POST twice by the same user -> 409');
     it.todo('POST for a missing movie -> 404');
-    it.todo('GET /api/movies/:movieId/reviews is public, paginated, and shows usernames');
     it.todo('PATCH by the author -> 200 and the movie average changes');
     it.todo('PATCH by another user -> 403');
     it.todo('DELETE by the author -> 204');
