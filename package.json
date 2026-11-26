@@ -8,6 +8,7 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
     "seed:admin": "ts-node-dev --transpile-only scripts/seed-admin.ts",
+    "seed:sample": "ts-node-dev --transpile-only scripts/seed-sample.ts",
     "test": "jest",
     "test:unit": "jest --selectProjects unit",
     "test:integration": "jest --selectProjects integration",
