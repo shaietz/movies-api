@@ -1,4 +1,6 @@
 import { Types } from 'mongoose';
+import { MovieModel } from '../../../src/modules/movies/movie.model';
+import { ReviewModel } from '../../../src/modules/reviews/review.model';
 import { reviewsService } from '../../../src/modules/reviews/reviews.service';
 import { listReviewsQuery } from '../../../src/modules/reviews/reviews.validators';
 import { createUser } from '../../helpers/auth';
@@ -112,9 +114,108 @@ describe('reviewsService (integration)', () => {
     });
   });
 
-  it.todo('create updates ratingAverage and reviewCount on the movie');
+  describe('recalculateMovieStats', () => {
+    it('writes the average and count of all the movie reviews onto the movie', async () => {
+      const movie = await createMovie();
+      for (const rating of [7, 8, 8]) {
+        const { user } = await createUser();
+        await createReview({ movie: movie._id, user: user._id, rating });
+      }
+
+      await reviewsService.recalculateMovieStats(movie.id);
+
+      expect(await MovieModel.findById(movie.id).lean()).toMatchObject({
+        ratingAverage: 7.7,
+        reviewCount: 3,
+      });
+    });
+
+    it('resets the stats to zero when the movie has no reviews left', async () => {
+      const movie = await createMovie();
+      await MovieModel.updateOne({ _id: movie._id }, { ratingAverage: 6, reviewCount: 2 });
+
+      await reviewsService.recalculateMovieStats(movie.id);
+
+      expect(await MovieModel.findById(movie.id).lean()).toMatchObject({
+        ratingAverage: 0,
+        reviewCount: 0,
+      });
+    });
+
+    it('ignores reviews of other movies', async () => {
+      const movie = await createMovie();
+      const other = await createMovie();
+      const { user } = await createUser();
+      await createReview({ movie: movie._id, user: user._id, rating: 4 });
+      await createReview({ movie: other._id, user: user._id, rating: 10 });
+
+      await reviewsService.recalculateMovieStats(movie.id);
+
+      expect(await MovieModel.findById(movie.id).lean()).toMatchObject({
+        ratingAverage: 4,
+        reviewCount: 1,
+      });
+    });
+  });
+
+  describe('create', () => {
+    it('saves the review with the author and updates ratingAverage and reviewCount on the movie', async () => {
+      const movie = await createMovie();
+      const { user } = await createUser({ username: 'first' });
+
+      const review = await reviewsService.create(movie.id, { rating: 8, text: 'Great' }, user.id);
+
+      expect(review.toJSON()).toMatchObject({
+        rating: 8,
+        text: 'Great',
+        movie: movie._id,
+        user: { id: user.id, username: 'first' },
+      });
+      expect(await MovieModel.findById(movie.id).lean()).toMatchObject({
+        ratingAverage: 8,
+        reviewCount: 1,
+      });
+    });
+
+    it('two different users can review the same movie', async () => {
+      const movie = await createMovie();
+      const { user: u1 } = await createUser();
+      const { user: u2 } = await createUser();
+
+      await reviewsService.create(movie.id, { rating: 6, text: '' }, u1.id);
+      await reviewsService.create(movie.id, { rating: 9, text: '' }, u2.id);
+
+      expect(await ReviewModel.countDocuments({ movie: movie._id })).toBe(2);
+      expect(await MovieModel.findById(movie.id).lean()).toMatchObject({
+        ratingAverage: 7.5,
+        reviewCount: 2,
+      });
+    });
+
+    it('the same user cannot review the same movie twice (409)', async () => {
+      const movie = await createMovie();
+      const { user } = await createUser();
+      await reviewsService.create(movie.id, { rating: 6, text: '' }, user.id);
+
+      await expect(
+        reviewsService.create(movie.id, { rating: 9, text: '' }, user.id),
+      ).rejects.toMatchObject({ statusCode: 409 });
+      expect(await MovieModel.findById(movie.id).lean()).toMatchObject({
+        ratingAverage: 6,
+        reviewCount: 1,
+      });
+    });
+
+    it('throws 404 and saves nothing when the movie does not exist', async () => {
+      const { user } = await createUser();
+
+      await expect(
+        reviewsService.create(new Types.ObjectId().toString(), { rating: 5, text: '' }, user.id),
+      ).rejects.toMatchObject({ statusCode: 404 });
+      expect(await ReviewModel.countDocuments()).toBe(0);
+    });
+  });
+
   it.todo('update of a rating updates ratingAverage on the movie');
   it.todo('remove updates ratingAverage and reviewCount on the movie');
-  it.todo('the same user cannot review the same movie twice (409)');
-  it.todo('two different users can review the same movie');
 });

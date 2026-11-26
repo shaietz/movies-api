@@ -20,6 +20,9 @@ export function buildReviewSort(sort: ReviewSortField): Record<string, 1 | -1> {
   return { [field]: direction, _id: direction };
 }
 
+const isDuplicateKeyError = (err: unknown): boolean =>
+  typeof err === 'object' && err !== null && (err as { code?: unknown }).code === 11000;
+
 async function ensureMovieExists(movieId: string): Promise<void> {
   if (!(await MovieModel.exists({ _id: movieId }))) throw AppError.notFound('Movie');
 }
@@ -75,12 +78,21 @@ export const reviewsService = {
     return review;
   },
 
-  async create(
-    _movieId: string,
-    _input: CreateReviewInput,
-    _userId: string,
-  ): Promise<ReviewDocument> {
-    throw AppError.notImplemented('reviews.create');
+  async create(movieId: string, input: CreateReviewInput, userId: string): Promise<ReviewDocument> {
+    await ensureMovieExists(movieId);
+
+    let review: ReviewDocument;
+    try {
+      review = await ReviewModel.create({ ...input, movie: movieId, user: userId });
+    } catch (err) {
+      // Rely on the unique (movie, user) index rather than a "find first" check, so two
+      // simultaneous requests from the same user can't both get through.
+      if (isDuplicateKeyError(err)) throw AppError.conflict('You have already reviewed this movie');
+      throw err;
+    }
+
+    await this.recalculateMovieStats(movieId);
+    return review.populate('user', AUTHOR_FIELDS);
   },
 
   async update(_id: string, _input: UpdateReviewInput, _actor: AuthUser): Promise<ReviewDocument> {
@@ -91,7 +103,14 @@ export const reviewsService = {
     throw AppError.notImplemented('reviews.remove');
   },
 
-  async recalculateMovieStats(_movieId: string): Promise<void> {
-    throw AppError.notImplemented('reviews.recalculateMovieStats');
+  /**
+   * Recomputes ratingAverage + reviewCount from all of the movie's reviews and stores them
+   * on the movie. Recomputing from scratch (instead of adjusting by +/- one rating) means
+   * the stats can never drift, whatever happened before.
+   */
+  async recalculateMovieStats(movieId: string): Promise<void> {
+    const reviews = await ReviewModel.find({ movie: movieId }, { rating: 1, _id: 0 }).lean();
+    const stats = calculateRatingStats(reviews.map((r) => r.rating));
+    await MovieModel.updateOne({ _id: movieId }, { $set: stats });
   },
 };
