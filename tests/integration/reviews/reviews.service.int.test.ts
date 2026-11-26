@@ -216,6 +216,58 @@ describe('reviewsService (integration)', () => {
     });
   });
 
-  it.todo('update of a rating updates ratingAverage on the movie');
-  it.todo('remove updates ratingAverage and reviewCount on the movie');
+  describe('update and remove', () => {
+    /** A movie with two reviews (6 and 8), created through the service so the stats are set. */
+    async function movieWithTwoReviews() {
+      const movie = await createMovie();
+      const a = await createUser();
+      const b = await createUser();
+      const reviewA = await reviewsService.create(movie.id, { rating: 6, text: '' }, a.user.id);
+      await reviewsService.create(movie.id, { rating: 8, text: '' }, b.user.id);
+      const actorA = { id: a.user.id, role: a.user.role };
+      return { movie, reviewA, actorA };
+    }
+
+    const statsOf = async (movieId: string) =>
+      MovieModel.findById(movieId, { ratingAverage: 1, reviewCount: 1, _id: 0 }).lean();
+
+    it('update of a rating updates ratingAverage on the movie', async () => {
+      const { movie, reviewA, actorA } = await movieWithTwoReviews();
+      expect(await statsOf(movie.id)).toEqual({ ratingAverage: 7, reviewCount: 2 });
+
+      const updated = await reviewsService.update(reviewA.id, { rating: 10 }, actorA);
+
+      expect(updated.rating).toBe(10);
+      expect(await statsOf(movie.id)).toEqual({ ratingAverage: 9, reviewCount: 2 });
+    });
+
+    it('update of the text keeps the rating and saves the new text', async () => {
+      const { reviewA, actorA } = await movieWithTwoReviews();
+
+      await reviewsService.update(reviewA.id, { text: 'Changed my mind' }, actorA);
+
+      expect(await ReviewModel.findById(reviewA.id).lean()).toMatchObject({
+        rating: 6,
+        text: 'Changed my mind',
+      });
+    });
+
+    it('remove updates ratingAverage and reviewCount on the movie', async () => {
+      const { movie, reviewA, actorA } = await movieWithTwoReviews();
+
+      await reviewsService.remove(reviewA.id, actorA);
+
+      expect(await ReviewModel.findById(reviewA.id)).toBeNull();
+      expect(await statsOf(movie.id)).toEqual({ ratingAverage: 8, reviewCount: 1 });
+    });
+
+    it('after removing their review, the user can review the movie again', async () => {
+      const { movie, reviewA, actorA } = await movieWithTwoReviews();
+      await reviewsService.remove(reviewA.id, actorA);
+
+      await reviewsService.create(movie.id, { rating: 4, text: '' }, actorA.id);
+
+      expect(await statsOf(movie.id)).toEqual({ ratingAverage: 6, reviewCount: 2 });
+    });
+  });
 });

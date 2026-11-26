@@ -23,6 +23,14 @@ export function buildReviewSort(sort: ReviewSortField): Record<string, 1 | -1> {
 const isDuplicateKeyError = (err: unknown): boolean =>
   typeof err === 'object' && err !== null && (err as { code?: unknown }).code === 11000;
 
+async function findReviewOrThrow(id: string): Promise<ReviewDocument> {
+  const review = await ReviewModel.findById(id);
+  if (!review) throw AppError.notFound('Review');
+  return review;
+}
+
+const isAuthor = (review: ReviewDocument, actor: AuthUser) => String(review.user) === actor.id;
+
 async function ensureMovieExists(movieId: string): Promise<void> {
   if (!(await MovieModel.exists({ _id: movieId }))) throw AppError.notFound('Movie');
 }
@@ -95,12 +103,27 @@ export const reviewsService = {
     return review.populate('user', AUTHOR_FIELDS);
   },
 
-  async update(_id: string, _input: UpdateReviewInput, _actor: AuthUser): Promise<ReviewDocument> {
-    throw AppError.notImplemented('reviews.update');
+  /** Author only: not even an admin may put words in someone else's review. */
+  async update(id: string, input: UpdateReviewInput, actor: AuthUser): Promise<ReviewDocument> {
+    const review = await findReviewOrThrow(id);
+    if (!isAuthor(review, actor)) throw AppError.forbidden('You can only edit your own review');
+
+    review.set(input);
+    await review.save();
+    // Only the rating affects the movie stats.
+    if (input.rating !== undefined) await this.recalculateMovieStats(String(review.movie));
+    return review.populate('user', AUTHOR_FIELDS);
   },
 
-  async remove(_id: string, _actor: AuthUser): Promise<void> {
-    throw AppError.notImplemented('reviews.remove');
+  /** The author, or an admin moderating content. */
+  async remove(id: string, actor: AuthUser): Promise<void> {
+    const review = await findReviewOrThrow(id);
+    if (!isAuthor(review, actor) && actor.role !== 'admin') {
+      throw AppError.forbidden('You can only delete your own review');
+    }
+
+    await review.deleteOne();
+    await this.recalculateMovieStats(String(review.movie));
   },
 
   /**
