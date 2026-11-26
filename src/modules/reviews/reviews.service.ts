@@ -1,8 +1,28 @@
 import { AppError } from '../../shared/errors/AppError';
 import type { AuthUser } from '../../shared/types/express';
-import type { Paginated } from '../../shared/utils/pagination';
-import type { ReviewDocument } from './review.model';
-import type { CreateReviewInput, ListReviewsQuery, UpdateReviewInput } from './reviews.validators';
+import { buildPaginated, type Paginated } from '../../shared/utils/pagination';
+import { MovieModel } from '../movies/movie.model';
+import { ReviewModel, type ReviewDocument } from './review.model';
+import type {
+  CreateReviewInput,
+  ListReviewsQuery,
+  ReviewSortField,
+  UpdateReviewInput,
+} from './reviews.validators';
+
+/** Only the public part of the author is shown next to a review. */
+const AUTHOR_FIELDS = 'username';
+
+/** `'-rating'` -> `{ rating: -1, _id: -1 }`. `_id` keeps pagination order stable. */
+export function buildReviewSort(sort: ReviewSortField): Record<string, 1 | -1> {
+  const direction = sort.startsWith('-') ? -1 : 1;
+  const field = sort.replace(/^-/, '');
+  return { [field]: direction, _id: direction };
+}
+
+async function ensureMovieExists(movieId: string): Promise<void> {
+  if (!(await MovieModel.exists({ _id: movieId }))) throw AppError.notFound('Movie');
+}
 
 export interface RatingStats {
   ratingAverage: number;
@@ -32,15 +52,27 @@ export function calculateRatingStats(ratings: number[]): RatingStats {
  *               ratingAverage + reviewCount onto the movie document.
  */
 export const reviewsService = {
-  async listForMovie(
-    _movieId: string,
-    _query: ListReviewsQuery,
-  ): Promise<Paginated<ReviewDocument>> {
-    throw AppError.notImplemented('reviews.listForMovie');
+  async listForMovie(movieId: string, query: ListReviewsQuery): Promise<Paginated<ReviewDocument>> {
+    await ensureMovieExists(movieId);
+    const { page, limit } = query;
+    const filter = { movie: movieId };
+
+    const [data, total] = await Promise.all([
+      ReviewModel.find(filter)
+        .sort(buildReviewSort(query.sort))
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .populate('user', AUTHOR_FIELDS),
+      ReviewModel.countDocuments(filter),
+    ]);
+
+    return buildPaginated(data, total, page, limit);
   },
 
-  async getById(_id: string): Promise<ReviewDocument> {
-    throw AppError.notImplemented('reviews.getById');
+  async getById(id: string): Promise<ReviewDocument> {
+    const review = await ReviewModel.findById(id).populate('user', AUTHOR_FIELDS);
+    if (!review) throw AppError.notFound('Review');
+    return review;
   },
 
   async create(
