@@ -1,3 +1,4 @@
+import { MovieModel } from '../../../src/modules/movies/movie.model';
 import { ReviewModel } from '../../../src/modules/reviews/review.model';
 import { reviewsService } from '../../../src/modules/reviews/reviews.service';
 import { UserModel } from '../../../src/modules/users/user.model';
@@ -44,6 +45,18 @@ describe('usersService (integration)', () => {
     recalc.mockRestore();
   });
 
-  // Needs reviewsService.recalculateMovieStats (reviews module) to be implemented.
-  it.todo('remove updates the affected movies rating stats');
+  it('remove updates the affected movies rating stats', async () => {
+    const { user: admin } = await createAdmin();
+    const { user } = await createUser();
+    const { user: other } = await createUser();
+    const movie = await createMovie();
+    await createReview({ movie: movie._id, user: user._id, rating: 2 });
+    await createReview({ movie: movie._id, user: other._id, rating: 8 });
+    await reviewsService.recalculateMovieStats(movie.id);
+
+    await usersService.remove(user.id, admin.id);
+
+    const updated = await MovieModel.findById(movie._id).lean();
+    expect(updated).toMatchObject({ ratingAverage: 8, reviewCount: 1 });
+  });
 });

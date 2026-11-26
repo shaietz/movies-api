@@ -37,9 +37,9 @@ describe('reviewsService (integration)', () => {
     });
 
     it('throws 404 when the review does not exist', async () => {
-      await expect(
-        reviewsService.getById(new Types.ObjectId().toString()),
-      ).rejects.toMatchObject({ statusCode: 404 });
+      await expect(reviewsService.getById(new Types.ObjectId().toString())).rejects.toMatchObject({
+        statusCode: 404,
+      });
     });
   });
 

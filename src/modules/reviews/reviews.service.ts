@@ -51,16 +51,9 @@ export function calculateRatingStats(ratings: number[]): RatingStats {
 }
 
 /**
- * OWNER: reviews module
- *
- * listForMovie: public, paginated. -> 404 if the movie doesn't exist. Populate user.username.
- * getById:      public. -> 404 if missing.
- * create:       any logged-in user. -> 404 if movie missing, -> 409 if this user already
- *               reviewed this movie (unique index). Then recalculateMovieStats().
- * update:       author only (-> 403 otherwise). Then recalculateMovieStats().
- * remove:       author OR admin (-> 403 otherwise). Then recalculateMovieStats().
- * recalculateMovieStats: reads all ratings for the movie (aggregation) and writes
- *               ratingAverage + reviewCount onto the movie document.
+ * Reads are public. Creating needs a logged-in user (one review per user per movie),
+ * editing is author-only, deleting is author or admin. Every write that can change a
+ * rating recalculates the movie's ratingAverage and reviewCount.
  */
 export const reviewsService = {
   async listForMovie(movieId: string, query: ListReviewsQuery): Promise<Paginated<ReviewDocument>> {

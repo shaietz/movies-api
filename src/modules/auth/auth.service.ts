@@ -19,7 +19,9 @@ export const authService = {
 
     if (existing) {
       throw AppError.conflict(
-        existing.email === input.email ? 'Email is already registered' : 'Username is already taken',
+        existing.email === input.email
+          ? 'Email is already registered'
+          : 'Username is already taken',
       );
     }
 
