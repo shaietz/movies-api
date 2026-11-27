@@ -1,7 +1,9 @@
 import dotenv from 'dotenv';
 import { z } from 'zod';
 
-dotenv.config();
+// quiet: dotenv v17+ otherwise logs "injected env (n) from .env" on every load,
+// which floods the test output (once per test file).
+dotenv.config({ quiet: true });
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
