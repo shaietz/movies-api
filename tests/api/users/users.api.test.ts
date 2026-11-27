@@ -46,6 +46,17 @@ describe('Users API (admin only)', () => {
     }
   });
 
+  it('GET /api/users/:id returns the user without a password', async () => {
+    const { token } = await createAdmin();
+    const { user } = await createUser();
+
+    const res = await api().get(`/api/users/${user.id}`).set(bearer(token));
+
+    expect(res.status).toBe(200);
+    expect(res.body.user).toMatchObject({ id: user.id, username: user.username, role: 'user' });
+    expect(res.body.user).not.toHaveProperty('password');
+  });
+
   it('GET /api/users/:id returns 404 for an unknown user', async () => {
     const { token } = await createAdmin();
     const res = await api().get(`/api/users/${someId}`).set(bearer(token));

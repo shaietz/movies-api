@@ -49,9 +49,7 @@ describe('Auth API', () => {
   describe('POST /api/auth/login', () => {
     it('returns 200 and a token for valid credentials', async () => {
       const { user, password } = await createUser({ email: 'fan@example.com' });
-      const res = await api()
-        .post('/api/auth/login')
-        .send({ email: 'FAN@example.com', password });
+      const res = await api().post('/api/auth/login').send({ email: 'FAN@example.com', password });
 
       expect(res.status).toBe(200);
       expect(verifyToken(res.body.token)).toEqual({ id: user.id, role: 'user' });
@@ -88,7 +86,9 @@ describe('Auth API', () => {
     });
 
     it('returns 404 if the token belongs to a deleted user', async () => {
-      const res = await api().get('/api/auth/me').set(bearer(tokenFor('user')));
+      const res = await api()
+        .get('/api/auth/me')
+        .set(bearer(tokenFor('user')));
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('NOT_FOUND');
     });

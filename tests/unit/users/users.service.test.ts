@@ -24,9 +24,9 @@ describe('usersService (unit)', () => {
   describe('updateRole', () => {
     it('throws 404 when the user does not exist', async () => {
       users.findByIdAndUpdate.mockResolvedValue(null as never);
-      await expect(usersService.updateRole(newId(), { role: 'admin' }, newId())).rejects.toMatchObject(
-        { statusCode: 404 },
-      );
+      await expect(
+        usersService.updateRole(newId(), { role: 'admin' }, newId()),
+      ).rejects.toMatchObject({ statusCode: 404 });
     });
 
     it('throws 400 when an admin tries to demote themselves', async () => {

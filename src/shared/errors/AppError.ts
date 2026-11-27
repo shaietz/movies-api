@@ -5,7 +5,6 @@ export type ErrorCode =
   | 'FORBIDDEN'
   | 'NOT_FOUND'
   | 'CONFLICT'
-  | 'NOT_IMPLEMENTED'
   | 'INTERNAL_ERROR';
 
 /**
@@ -45,10 +44,5 @@ export class AppError extends Error {
 
   static conflict(message = 'Resource already exists') {
     return new AppError(409, 'CONFLICT', message);
-  }
-
-  /** Placeholder used by skeleton stubs. Remove once the feature is implemented. */
-  static notImplemented(feature: string) {
-    return new AppError(501, 'NOT_IMPLEMENTED', `${feature} is not implemented yet`);
   }
 }

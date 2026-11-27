@@ -8,7 +8,6 @@ describe('AppError', () => {
     [AppError.forbidden(), 403, 'FORBIDDEN'],
     [AppError.notFound('Movie'), 404, 'NOT_FOUND'],
     [AppError.conflict(), 409, 'CONFLICT'],
-    [AppError.notImplemented('x'), 501, 'NOT_IMPLEMENTED'],
   ])('%o has status %i and code %s', (error, status, code) => {
     expect(error).toBeInstanceOf(Error);
     expect(error.statusCode).toBe(status);
